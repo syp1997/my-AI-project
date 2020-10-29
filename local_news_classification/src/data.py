@@ -5,11 +5,7 @@ import csv
 import collections
 from collections import Counter
 import math
-import logging
-import warnings
 
-warnings.filterwarnings('ignore')
-logger = logging.getLogger(__name__)
 
 class DataProcess():
     

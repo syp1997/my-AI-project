@@ -3,8 +3,6 @@ import torch.nn as nn
 import torch.nn.functional as F
 from transformers import BertModel
 import numpy as np
-from tqdm import tqdm
-import math
 
 
 class ModelConfig:
