@@ -40,6 +40,18 @@ class Model(nn.Module):
     def configure_optimizers(self, train_config):
         optimizer = torch.optim.AdamW(self.parameters(), lr=train_config.learning_rate, betas=train_config.betas)
         return optimizer
+    
+    def fix_layer_grad(self, fix_layer=11):
+        # do not train bert embedding layer
+        for par in self.bert.embeddings.parameters(): 
+            par.requires_grad = False
+        # only train last(11th) bert encode layer
+        for par in self.bert.encoder.layer[:fix_layer].parameters(): 
+            par.requires_grad = False
+            
+        # print model all parameters and parameters need training
+        print('{} : all params: {:4f}M'.format(self._get_name(), sum(p.numel() for p in self.parameters()) / 1000 / 1000))
+        print('{} : need grad params: {:4f}M'.format(self._get_name(), sum(p.numel() for p in self.parameters() if p.requires_grad) / 1000 / 1000))
 
     def forward(self, input_ids, entity_ids=None, entity_length=None, entity_score=None, 
                 entity_embeds=None, labels=None, token_type_ids=None, attention_mask=None):

@@ -194,7 +194,7 @@ class DataProcess():
                 ret[phrase] = idf
         return ret, ret['<UNK>']
 
-    def load_entity_score_dict(self, entity_frep_file):
+    def load_entity_score_dict(self, entity_frep_file, min_count=5):
         entity_score_dict = {}
         with open(entity_frep_file) as f:
             for line in f:
@@ -204,7 +204,7 @@ class DataProcess():
                 if c1 == 0 or c2 == 0:
                     c1 += 1
                     c2 += 1
-                if c1 + c2 > 5:
+                if c1 + c2 > min_count:
                     entity_score_dict[entity] = freq
         print("Entity Score vocab size: ", len(entity_score_dict))
         return entity_score_dict
