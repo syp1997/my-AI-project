@@ -4,6 +4,11 @@ from tqdm import tqdm
 import math
 import logging
 
+logging.basicConfig(
+        format="%(asctime)s - %(message)s",
+        datefmt="%m/%d/%Y %H:%M:%S",
+        level=logging.INFO,
+)
 logger = logging.getLogger(__name__)
 
 
