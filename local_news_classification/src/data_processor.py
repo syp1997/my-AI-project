@@ -57,7 +57,7 @@ class DataProcess():
         return all_input_ids, labels
     
     # Function to build entity vocab
-    def encode_entity(self):
+    def build_entity_vocab(self):
         _, entity_list, _ = self.prepare_data()
         # get all entity
         entity_list_all = [en for entity in entity_list for en in entity]
@@ -134,7 +134,7 @@ class DataProcess():
                 if en in entity_score_dict:
                     en_score = float(entity_score_dict[en])
                     score *= en_score
-            score = math.log(score,10)
+            score = math.log(score+1e-12,10)
             entity_score.append(score)
             if score >= 0:
                 entity_score.append(score**2)
@@ -194,7 +194,7 @@ class DataProcess():
                 ret[phrase] = idf
         return ret, ret['<UNK>']
 
-    def load_entity_score_dict(self, entity_frep_file, min_count=5):
+    def load_entity_score_dict(self, entity_frep_file, min_count=10):
         entity_score_dict = {}
         with open(entity_frep_file) as f:
             for line in f:
