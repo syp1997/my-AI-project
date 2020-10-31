@@ -5,6 +5,9 @@ import csv
 import collections
 from collections import Counter
 import math
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class DataProcess():
@@ -39,7 +42,7 @@ class DataProcess():
         for text in text_list:
             num += 1
             if num % 10000 == 0:
-                print("Processing Data: ", num)
+                logger.info("Processing Data: {}w".format(num/10000))
             input_ids = tokenizer.encode(
                             text,                      
                             add_special_tokens = True,             
@@ -53,7 +56,7 @@ class DataProcess():
         # Save tensor
         torch.save(all_input_ids, self.text_id_root)
         torch.save(labels,self.labels_root)
-        print("Saved success!")
+        logger.info("Saved success!")
         return all_input_ids, labels
     
     # Function to build entity vocab
@@ -61,7 +64,7 @@ class DataProcess():
         _, entity_list, _ = self.prepare_data()
         # get all entity
         entity_list_all = [en for entity in entity_list for en in entity]
-        print("All Entity number: ", len(entity_list_all))
+        logger.info("All Entity number: {}".format(len(entity_list_all)))
         # build entity vocab
         entity_vocab = collections.OrderedDict(Counter(entity_list_all))
         entity_list_uniq = [entity for entity in entity_vocab.keys()]
@@ -70,7 +73,7 @@ class DataProcess():
         entity_to_index['<pad>'] = 1
         entity_to_index = collections.OrderedDict(sorted(entity_to_index.items(), key=lambda entity_to_index: entity_to_index[1]))
         index_to_entity = [entity for i, entity in enumerate(entity_to_index)]
-        print("Entity vocab size: ", len(entity_to_index))
+        logger.info("Entity vocab size: {}".format(len(entity_to_index)))
         return entity_to_index, index_to_entity
     
     # Function to build entity vocab with pretrained vector
@@ -101,7 +104,7 @@ class DataProcess():
                     idx_to_vector.append(torch.tensor(self.en_vector_norm(np.sum(word_vectors * weights, axis=0))).float())
         entity_vector = torch.stack(idx_to_vector)
         torch.save(entity_vector, entity_vector_root)
-        print("Saved success!")
+        logger.info("Saved success!")
         return entity_vector
     
     # Function to get token ids for a list of entities
@@ -121,7 +124,7 @@ class DataProcess():
         all_entity_length = torch.tensor(all_entity_length)
         torch.save(all_entity_ids, self.entity_id_root)
         torch.save(all_entity_length, self.entity_length_root)
-        print("Saved success!")
+        logger.info("Saved success!")
         return all_entity_ids, all_entity_length
     
     def build_entity_score(self, entity_score_dict):
@@ -146,8 +149,8 @@ class DataProcess():
         all_entity_score = torch.tensor(all_entity_score)
         all_entity_score, entity_score_mean, entity_score_std = self.en_score_norm(all_entity_score)
         torch.save(all_entity_score, self.entity_score_root)
-        print("Entity score mean: ", entity_score_mean)
-        print("Entity score std: ", entity_score_std)
+        logger.info("Entity score mean: {}".format(entity_score_mean))
+        logger.info("Entity score std: {}".format(entity_score_std))
         return all_entity_score, entity_score_mean, entity_score_std
         
     # normlize entity vector
@@ -178,8 +181,8 @@ class DataProcess():
         train_dataloader = DataLoader(train_dataset, batch_size = batch_size, shuffle = True)
         valid_dataloader = DataLoader(valid_dataset, batch_size = batch_size, shuffle = False)
         
-        print("Num of train_dataloader: ", len(train_dataloader))
-        print("Num of valid_dataloader: ", len(valid_dataloader))
+        logger.info("Num of train_dataloader: {}".format(len(train_dataloader)))
+        logger.info("Num of valid_dataloader: {}".format(len(valid_dataloader)))
 
         return train_dataloader, valid_dataloader
     
@@ -206,10 +209,10 @@ class DataProcess():
                     c2 += 1
                 if c1 + c2 > min_count:
                     entity_score_dict[entity] = freq
-        print("Entity Score vocab size: ", len(entity_score_dict))
+        logger.info("Entity Score vocab size: {}".format(len(entity_score_dict)))
         return entity_score_dict
     
     def load_entity_vector(self, entity_vector_root):
         entity_vector = torch.load(entity_vector_root)
-        print("Entity vector shape: ", entity_vector.shape)
+        logger.info("Entity vector shape: {}".format(entity_vector.shape))
         return torch.load(entity_vector_root)

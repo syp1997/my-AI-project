@@ -3,6 +3,9 @@ import torch.nn as nn
 import torch.nn.functional as F
 from transformers import BertModel
 import numpy as np
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class ModelConfig:
@@ -49,9 +52,9 @@ class Model(nn.Module):
         for par in self.bert.encoder.layer[:fix_layer].parameters(): 
             par.requires_grad = False
             
-        # print model all parameters and parameters need training
-        print('{} : all params: {:4f}M'.format(self._get_name(), sum(p.numel() for p in self.parameters()) / 1000 / 1000))
-        print('{} : need grad params: {:4f}M'.format(self._get_name(), sum(p.numel() for p in self.parameters() if p.requires_grad) / 1000 / 1000))
+        # log model all parameters and parameters need training
+        logger.info('{} : all params: {:4f}M'.format(self._get_name(), sum(p.numel() for p in self.parameters()) / 1000 / 1000))
+        logger.info('{} : need grad params: {:4f}M'.format(self._get_name(), sum(p.numel() for p in self.parameters() if p.requires_grad) / 1000 / 1000))
 
     def forward(self, input_ids, entity_ids=None, entity_length=None, entity_score=None, 
                 entity_embeds=None, labels=None, token_type_ids=None, attention_mask=None):

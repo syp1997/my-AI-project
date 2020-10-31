@@ -4,6 +4,9 @@ import numpy as np
 import time 
 import csv
 import math
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class TestDataCollator():
@@ -123,10 +126,10 @@ class TestDataCollator():
                   en_pad_size, en_embd_dim, entity_score_dict, entity_score_mean, entity_score_std):
         last_time = time.time()
         input_ids = self.encode_text(tokenizer)
-        print('Encode text: Took {} seconds'.format(time.time() - last_time))
+        logger.info('Encode text: Took {} seconds'.format(time.time() - last_time))
         last_time = time.time()
         entity_vectors, entity_length, entity_score = self.encode_entity(entity_to_index, index_to_entity, wiki2vec, idf_dict, unk_idf, en_pad_size, en_embd_dim, entity_score_dict, entity_score_mean, entity_score_std)
-        print('Encode entity: Took {} seconds'.format(time.time() - last_time))
+        logger.info('Encode entity: Took {} seconds'.format(time.time() - last_time))
         # Split data into train and validation
         dataset = TensorDataset(input_ids, entity_vectors, entity_length, entity_score)
         

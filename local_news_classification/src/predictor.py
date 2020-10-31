@@ -1,5 +1,8 @@
 import torch
 from tqdm import tqdm
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class Predictor:
@@ -13,7 +16,7 @@ class Predictor:
         if torch.cuda.is_available():
             self.device = torch.device('cuda')
             self.model = torch.nn.DataParallel(self.model).to(self.device)
-        print('use device:', self.device)
+        logger.info('use device:'.format(self.device))
         
     def predict(self):
         model = self.model

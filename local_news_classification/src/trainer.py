@@ -4,11 +4,6 @@ from tqdm import tqdm
 import math
 import logging
 
-logging.basicConfig(
-        format="%(asctime)s - %(message)s",
-        datefmt="%m/%d/%Y %H:%M:%S",
-        level=logging.INFO,
-)
 logger = logging.getLogger(__name__)
 
 
@@ -46,7 +41,7 @@ class Trainer:
         if torch.cuda.is_available():
             self.device = torch.device('cuda')
             self.model = torch.nn.DataParallel(self.model).to(self.device)
-        print('use device:', self.device)
+        logger.info('use device:', self.device)
         
     def save_checkpoint(self):
         # DataParallel wrappers keep raw model object in .module attribute
