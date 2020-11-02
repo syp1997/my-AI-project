@@ -16,7 +16,7 @@ class Predictor:
         if torch.cuda.is_available():
             self.device = torch.device('cuda')
             self.model = torch.nn.DataParallel(self.model).to(self.device)
-        logger.info('use device:'.format(self.device))
+        logger.info('use device: {}'.format(self.device))
         
     def predict(self):
         model = self.model

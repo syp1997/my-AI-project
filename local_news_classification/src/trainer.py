@@ -41,12 +41,12 @@ class Trainer:
         if torch.cuda.is_available():
             self.device = torch.device('cuda')
             self.model = torch.nn.DataParallel(self.model).to(self.device)
-        logger.info('use device:', self.device)
+        logger.info('use device: {}'.format(self.device))
         
     def save_checkpoint(self):
         # DataParallel wrappers keep raw model object in .module attribute
         raw_model = self.model.module if hasattr(self.model, "module") else self.model
-        logger.info("saving %s", self.config.ckpt_path)
+        logger.info("saving {}".format(self.config.ckpt_path))
         torch.save(raw_model.state_dict(), self.config.ckpt_path)
         
     def binary_accuracy(self, preds, y):
@@ -117,8 +117,8 @@ class Trainer:
                 all_y = torch.stack(all_y, dim=0)
                 all_y_pred = torch.stack(all_y_pred, dim=0)
                 test_score = self.binary_accuracy(all_y_pred, all_y)
-                logger.info("test loss: %f", test_loss)
-                logger.info("test score: %f", test_score)
+                logger.info("test loss: {}".format(test_loss))
+                logger.info("test score: {}".format(test_score))
                 return test_loss
 
         self.tokens = 0 # counter used for learning rate decay
