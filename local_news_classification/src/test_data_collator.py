@@ -70,7 +70,7 @@ class TestDataCollator():
                 if en in entity_score_dict:
                     en_score = float(entity_score_dict[en])
                     score *= en_score
-            score = math.log(score,10)
+            score = math.log(score+1e-12,10)
             scores.append(score)
             if score >= 0:
                 scores.append(score**2)
