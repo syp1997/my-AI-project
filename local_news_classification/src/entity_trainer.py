@@ -7,7 +7,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-class TrainerConfig:
+class EntityTrainerConfig:
     # optimization parameters
     max_epochs = 10
     learning_rate = 3e-4
@@ -19,7 +19,7 @@ class TrainerConfig:
     warmup_tokens = 375e6 # use this to train model from a lower learning rate
     final_tokens = 260e9 # all tokens during whole training process
     # checkpoint settings
-    ckpt_path = 'local-likely-model.pt' # save model path
+    ckpt_path = 'entity_model.pt' # save model path
     num_workers = 0 # for DataLoader
 
     def __init__(self, **kwargs):
@@ -28,7 +28,7 @@ class TrainerConfig:
             setattr(self, k, v)
 
 
-class Trainer:
+class EntityTrainer:
 
     def __init__(self, model, train_loader, test_loader, config):
         self.model = model
@@ -69,16 +69,14 @@ class Trainer:
             all_y = []
             all_y_pred = []
             pbar = tqdm(enumerate(loader), total=len(loader)) if is_train else enumerate(loader)
-            for it, (text_ids, entity_ids, entity_length, entity_score, y) in pbar:
+            for it, (_, entity_ids, entity_length, _, y) in pbar:
                 # place data on the correct device
-                text_ids = text_ids.to(self.device)
                 entity_ids = entity_ids.to(self.device)
                 entity_length = entity_length.to(self.device)
-                entity_score = entity_score.to(self.device)
                 y = y.to(self.device)
                 # forward the model
                 with torch.set_grad_enabled(is_train):
-                    y_pred, loss = model(text_ids, entity_ids, entity_length, entity_score, None, y)
+                    y_pred, loss = model(entity_ids, entity_length, None, y)
                     loss = loss.mean() # collapse all losses if they are scattered on multiple gpus
                     losses.append(loss.item())
                     step_score = self.binary_accuracy(y_pred, y)

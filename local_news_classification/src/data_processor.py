@@ -12,13 +12,13 @@ logger = logging.getLogger(__name__)
 
 class DataProcess():
     
-    def __init__(self, data_root, text_id_root, labels_root, entity_id_root, entity_length_root, entity_score_root):
+    def __init__(self, data_root, text_id_root, labels_root, entity_id_root, entity_length_root, entity_distribute_root):
         self.data_root = data_root
         self.text_id_root = text_id_root
         self.labels_root = labels_root
         self.entity_id_root = entity_id_root
         self.entity_length_root = entity_length_root
-        self.entity_score_root = entity_score_root
+        self.entity_distribute_root = entity_distribute_root
     
     def prepare_data(self):
         docid_list = []
@@ -127,38 +127,28 @@ class DataProcess():
         logger.info("Saved success!")
         return all_entity_ids, all_entity_length
     
-    def build_entity_score(self, entity_score_dict):
+    def build_entity_distribute(self, entity_distribute_dict):
         _, entity_list, _ = self.prepare_data()
-        all_entity_score = []
+        all_entity_distribute = []
         for entities in entity_list:
-            entity_score = []
             score = 1
             for en in entities:
-                if en in entity_score_dict:
-                    en_score = float(entity_score_dict[en])
+                if en in entity_distribute_dict:
+                    en_score = float(entity_distribute_dict[en])
                     score *= en_score
             score = math.log(score+1e-12,10)
-            entity_score.append(score)
-            if score >= 0:
-                entity_score.append(score**2)
-                entity_score.append(score**0.5)
-            else:
-                entity_score.append(-score**2)
-                entity_score.append(-(abs(score)**0.5))
-            all_entity_score.append(entity_score)
-        all_entity_score = torch.tensor(all_entity_score)
-        all_entity_score, entity_score_mean, entity_score_std = self.en_score_norm(all_entity_score)
-        torch.save(all_entity_score, self.entity_score_root)
-        logger.info("Entity score mean: {}".format(entity_score_mean))
-        logger.info("Entity score std: {}".format(entity_score_std))
-        return all_entity_score, entity_score_mean, entity_score_std
+            all_entity_distribute.append(score)
+        all_entity_distribute = torch.tensor(all_entity_distribute)
+        logger.info("Entity distribute shape: {}".format(all_entity_distribute.shape))
+        torch.save(all_entity_distribute, self.entity_distribute_root)
+        return all_entity_distribute
         
     # normlize entity vector
     def en_vector_norm(self, vector):
         norm = np.linalg.norm(vector)
         return vector / (norm + 1e-9)
     
-    def en_score_norm(self,x):
+    def en_distribute_norm(self,x):
         mean = x.mean(dim=0,keepdim=True)
         std = x.std(dim=0, unbiased=False,keepdim=True)
         x_norm = (x - mean)/std
@@ -169,22 +159,24 @@ class DataProcess():
         all_input_ids = torch.load(self.text_id_root)
         all_entity_ids = torch.load(self.entity_id_root)
         all_entity_length = torch.load(self.entity_length_root)
-        all_entity_score = torch.load(self.entity_score_root)
+        all_entity_distribute = torch.load(self.entity_distribute_root)
         labels = torch.load(self.labels_root)
         # Split data into train and validation
-        dataset = TensorDataset(all_input_ids, all_entity_ids, all_entity_length, all_entity_score, labels)
+        dataset = TensorDataset(all_input_ids, all_entity_ids, all_entity_length, all_entity_distribute, labels)
         train_size = int(ratio * len(dataset))
         valid_size = len(dataset) - train_size
         train_dataset, valid_dataset = random_split(dataset, [train_size, valid_size])
 
         # Create train and validation dataloaders
+        all_dataloader = DataLoader(dataset, batch_size = batch_size, shuffle = False)
         train_dataloader = DataLoader(train_dataset, batch_size = batch_size, shuffle = True)
         valid_dataloader = DataLoader(valid_dataset, batch_size = batch_size, shuffle = False)
         
+        logger.info("Num of all_dataloader: {}".format(len(all_dataloader)))
         logger.info("Num of train_dataloader: {}".format(len(train_dataloader)))
         logger.info("Num of valid_dataloader: {}".format(len(valid_dataloader)))
 
-        return train_dataloader, valid_dataloader
+        return all_dataloader, train_dataloader, valid_dataloader
     
     
     # load idf file
@@ -197,8 +189,8 @@ class DataProcess():
                 ret[phrase] = idf
         return ret, ret['<UNK>']
 
-    def load_entity_score_dict(self, entity_frep_file, min_count=10):
-        entity_score_dict = {}
+    def load_entity_distribute_dict(self, entity_frep_file, min_count=10):
+        entity_distribute_dict = {}
         with open(entity_frep_file) as f:
             for line in f:
                 entity, c1, c2, freq = line.split('\t')
@@ -208,11 +200,16 @@ class DataProcess():
                     c1 += 1
                     c2 += 1
                 if c1 + c2 > min_count:
-                    entity_score_dict[entity] = freq
-        logger.info("Entity Score vocab size: {}".format(len(entity_score_dict)))
-        return entity_score_dict
+                    entity_distribute_dict[entity] = freq
+        logger.info("Entity distribute vocab size: {}".format(len(entity_distribute_dict)))
+        return entity_distribute_dict
     
     def load_entity_vector(self, entity_vector_root):
         entity_vector = torch.load(entity_vector_root)
         logger.info("Entity vector shape: {}".format(entity_vector.shape))
-        return torch.load(entity_vector_root)
+        return entity_vector
+    
+    def load_entity_distribute(self):
+        entity_distribute = torch.load(self.entity_distribute_root)
+        logger.info("Entity distribute shape: {}".format(entity_distribute.shape))
+        return entity_distribute

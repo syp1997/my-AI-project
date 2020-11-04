@@ -45,11 +45,11 @@ class TestDataCollator():
     
     # Function to get token ids for a list of entities
     def encode_entity(self, entity_to_index, index_to_entity, wiki2vec, idf_dict, unk_idf, 
-                      en_pad_size, en_embd_dim, entity_score_dict, entity_score_mean, entity_score_std):
+                      en_pad_size, en_embd_dim, entity_distribute_dict):
         _, entity_list = self.split_data()
         entity_vectors = []
         entity_length = []
-        entity_score = []
+        entity_distribute = []
         for entities in entity_list:
             # conpute entity vector
             nopad_vectors=[]
@@ -64,28 +64,19 @@ class TestDataCollator():
             entity_length.append(len(entities))
             
             # compute entity score
-            scores = []
             score = 1
             for en in entities:
-                if en in entity_score_dict:
-                    en_score = float(entity_score_dict[en])
+                if en in entity_distribute_dict:
+                    en_score = float(entity_distribute_dict[en])
                     score *= en_score
             score = math.log(score+1e-12,10)
-            scores.append(score)
-            if score >= 0:
-                scores.append(score**2)
-                scores.append(score**0.5)
-            else:
-                scores.append(-score**2)
-                scores.append(-(abs(score)**0.5))
-            entity_score.append(scores)
+            entity_distribute.append(score)
             
         entity_vectors = torch.stack(entity_vectors)
         entity_length = torch.tensor(entity_length)
-        entity_score = torch.tensor(entity_score)
-        entity_score = self.en_score_norm(entity_score, entity_score_mean, entity_score_std)
+        entity_distribute = torch.tensor(entity_distribute)
         
-        return entity_vectors, entity_length, entity_score
+        return entity_vectors, entity_length, entity_distribute
     
     def compute_entity_vector(self, entity, wiki2vec, idf_dict, unk_idf, en_embd_dim):
         entity_item = wiki2vec.get_entity(entity)
@@ -115,23 +106,23 @@ class TestDataCollator():
         norm = np.linalg.norm(vector)
         return vector / (norm + 1e-9)
     
-    def en_score_norm(self,x, entity_score_mean, entity_score_std):
-        mean = entity_score_mean
-        std = entity_score_std
+    def en_distribute_norm(self,x, entity_distribute_mean, entity_distribute_std):
+        mean = entity_distribute_mean
+        std = entity_distribute_std
         x_norm = (x - mean)/std
         return x_norm
     
     # build dataset and dataloader
     def load_data(self, batch_size, tokenizer, entity_to_index, index_to_entity, wiki2vec, idf_dict, unk_idf, 
-                  en_pad_size, en_embd_dim, entity_score_dict, entity_score_mean, entity_score_std):
+                  en_pad_size, en_embd_dim, entity_distribute_dict):
         last_time = time.time()
         input_ids = self.encode_text(tokenizer)
         logger.info('Encode text: Took {} seconds'.format(time.time() - last_time))
         last_time = time.time()
-        entity_vectors, entity_length, entity_score = self.encode_entity(entity_to_index, index_to_entity, wiki2vec, idf_dict, unk_idf, en_pad_size, en_embd_dim, entity_score_dict, entity_score_mean, entity_score_std)
+        entity_vectors, entity_length, entity_distribute = self.encode_entity(entity_to_index, index_to_entity, wiki2vec, idf_dict, unk_idf, en_pad_size, en_embd_dim, entity_distribute_dict)
         logger.info('Encode entity: Took {} seconds'.format(time.time() - last_time))
         # Split data into train and validation
-        dataset = TensorDataset(input_ids, entity_vectors, entity_length, entity_score)
+        dataset = TensorDataset(input_ids, entity_vectors, entity_length, entity_distribute)
         
         # Create train and validation dataloaders
         test_dataloader = DataLoader(dataset, batch_size = batch_size, shuffle = False)
