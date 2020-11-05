@@ -141,6 +141,7 @@ class DataProcess():
         all_entity_distribute = torch.tensor(all_entity_distribute)
         logger.info("Entity distribute shape: {}".format(all_entity_distribute.shape))
         torch.save(all_entity_distribute, self.entity_distribute_root)
+        logger.info("Saved success!")
         return all_entity_distribute
         
     # normlize entity vector
@@ -187,6 +188,7 @@ class DataProcess():
                 phrase, count, idf = line.split('\t')
                 idf = float(idf)
                 ret[phrase] = idf
+        logger.info("Load success!")
         return ret, ret['<UNK>']
 
     def load_entity_distribute_dict(self, entity_frep_file, min_count=10):
