@@ -13,19 +13,21 @@ logger = logging.getLogger(__name__)
 class DataProcess():
     
     def __init__(self, data_root, text_id_root, labels_root, entity_id_root, 
-                 entity_length_root, entity_score_root, domain_score_root):
+                 entity_length_root, entity_score_root, keyword_entropy_root, domain_score_root):
         self.data_root = data_root
         self.text_id_root = text_id_root
         self.labels_root = labels_root
         self.entity_id_root = entity_id_root
         self.entity_length_root = entity_length_root
         self.entity_score_root = entity_score_root
+        self.keyword_entropy_root = keyword_entropy_root
         self.domain_score_root = domain_score_root
     
     def prepare_data(self):
         docid_list = []
         text_list = []
         entity_list = []
+        keyword_list = []
         domain_list = []
         label_list = []
         with open(self.data_root, 'r') as f:
@@ -34,13 +36,14 @@ class DataProcess():
                 docid_list.append(line[0])
                 text_list.append(line[1])
                 entity_list.append(list(set(line[2].split('|'))))
-                domain_list.append(line[3])
-                label_list.append(int(line[4]))
-        return text_list, entity_list, domain_list, label_list
+                keyword_list.append(list(set(line[3].split('|'))))
+                domain_list.append(line[4])
+                label_list.append(int(line[5]))
+        return text_list, entity_list, keyword_list, domain_list, label_list
 
     # Function to get token ids for a list of texts 
     def encode_text(self, tokenizer):
-        text_list, _, _, label_list = self.prepare_data()
+        text_list, _, _, _, label_list = self.prepare_data()
         all_input_ids = []    
         num = 0
         for text in text_list:
@@ -65,7 +68,7 @@ class DataProcess():
     
     # Function to build entity vocab
     def build_entity_vocab(self):
-        _, entity_list, _, _ = self.prepare_data()
+        _, entity_list, _, _, _ = self.prepare_data()
         # get all entity
         entity_list_all = [en for entity in entity_list for en in entity]
         logger.info("All Entity number: {}".format(len(entity_list_all)))
@@ -114,7 +117,7 @@ class DataProcess():
     # Function to get token ids for a list of entities
     def build_entity_id(self, entity_to_index, index_to_entity, en_pad_size):
         # build entity index
-        _, entity_list, _, _ = self.prepare_data()
+        _, entity_list, _, _, _ = self.prepare_data()
         all_entity_ids = []
         all_entity_length = []
         for entities in entity_list:
@@ -132,7 +135,7 @@ class DataProcess():
         return all_entity_ids, all_entity_length
     
     def build_entity_score(self, entity_frep_file):
-        _, entity_list, _, _ = self.prepare_data()
+        _, entity_list, _, _, _ = self.prepare_data()
         entity_score_dict = self.load_entity_score_dict(entity_frep_file)
         all_entity_score = []
         for entities in entity_list:
@@ -148,8 +151,24 @@ class DataProcess():
         logger.info("Saved success to {}".format(self.entity_score_root))
         return all_entity_score
     
+    def build_keyword_entropy(self, keyword_entropy_file):
+        _, _, keyword_list, _, _ = self.prepare_data()
+        keyword_entropy_dict = self.load_keyword_entropy_dict(keyword_entropy_file)
+        all_keyword_entropy = []
+        for keywords in keyword_list:
+            entropy = 0
+            for word in keywords:
+                if word in keyword_entropy_dict:
+                    word_entropy = float(keyword_entropy_dict[word])
+                    entropy += word_entropy
+            all_keyword_entropy.append(entropy/len(keywords))
+        all_keyword_entropy = torch.tensor(all_keyword_entropy)
+        torch.save(all_keyword_entropy, self.keyword_entropy_root)
+        logger.info("Saved success to {}".format(self.keyword_entropy_root))
+        return all_keyword_entropy
+    
     def build_domain_score(self, domain_frep_file):
-        _, _, domain_list, _ = self.prepare_data()
+        _, _, _, domain_list, _ = self.prepare_data()
         domain_score_dict = self.load_domain_score_dict(domain_frep_file)
         all_domain_score = []
         for domain in domain_list:
@@ -173,10 +192,14 @@ class DataProcess():
         all_entity_ids = torch.load(self.entity_id_root)
         all_entity_length = torch.load(self.entity_length_root)
         all_entity_score = torch.load(self.entity_score_root)
+        all_keyword_entropy = torch.load(self.keyword_entropy_root)
         all_domain_score = torch.load(self.domain_score_root)
         labels = torch.load(self.labels_root)
         # Split data into train and validation
-        dataset = TensorDataset(all_input_ids, all_entity_ids, all_entity_length, all_entity_score, all_domain_score, labels)
+        dataset = TensorDataset(all_input_ids, all_entity_ids, 
+                                all_entity_length, all_entity_score, 
+                                all_keyword_entropy, all_domain_score, 
+                                labels)
         train_size = int(ratio * len(dataset))
         valid_size = len(dataset) - train_size
         train_dataset, valid_dataset = random_split(dataset, [train_size, valid_size])
@@ -233,6 +256,15 @@ class DataProcess():
                     domain_score_dict[domain] = freq
         logger.info("domain score vocab size: {}".format(len(domain_score_dict)))
         return domain_score_dict
+    
+    def load_keyword_entropy_dict(self, keyword_entropy_file):
+        keyword_entropy_dict = {}
+        with open(keyword_entropy_file) as f:
+            for line in f:
+                keyword, entropy = line.split('\t')
+                keyword_entropy_dict[keyword] = entropy
+        logger.info("keyword entropy vocab size: {}".format(len(keyword_entropy_dict)))
+        return keyword_entropy_dict
     
     def load_entity_vector(self, entity_vector_root):
         entity_vector = torch.load(entity_vector_root)

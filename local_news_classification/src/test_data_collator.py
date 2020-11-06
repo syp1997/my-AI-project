@@ -18,6 +18,7 @@ class TestDataCollator():
         docid_list = []
         text_list = []
         entity_list = []
+        keyword_list = []
         domain_list = []
         with open(self.test_data_file, 'r') as f:
             reader = csv.reader(f, delimiter='\t')
@@ -25,12 +26,13 @@ class TestDataCollator():
                 docid_list.append(line[0])
                 text_list.append(line[1])
                 entity_list.append(list(set(line[2].split('|'))))
-                domain_list.append(line[3])
-        return text_list, entity_list, domain_list
+                keyword_list.append(list(set(line[3].split('|'))))
+                domain_list.append(line[4])
+        return text_list, entity_list, keyword_list, domain_list
 
     # Function to get token ids for a list of texts 
     def encode_text(self,tokenizer):
-        text_list, _, _ = self.split_data()
+        text_list, _, _, _ = self.split_data()
         all_input_ids = []    
         num = 0
         for text in text_list:
@@ -47,9 +49,10 @@ class TestDataCollator():
     
     # Function to get token ids for a list of entities
     def encode_entity(self, entity_to_index, index_to_entity, wiki2vec, idf_dict, unk_idf, 
-                      en_pad_size, en_embd_dim, entity_frep_file, domain_frep_file):
-        _, entity_list, domain_list = self.split_data()
+                      en_pad_size, en_embd_dim, entity_frep_file, keyword_entropy_file, domain_frep_file):
+        _, entity_list, keyword_list, domain_list = self.split_data()
         entity_score_dict = self.load_entity_score_dict(entity_frep_file)
+        keyword_entropy_dict = self.load_keyword_entropy_dict(keyword_entropy_file)
         domain_score_dict = self.load_domain_score_dict(domain_frep_file)
         entity_vectors = []
         entity_length = []
@@ -76,21 +79,31 @@ class TestDataCollator():
             score = math.log(score+1e-12,10)
             entity_score.append(score)
             
-            # compute domain score
-            domain_score = []
-            for domain in domain_list:
-                score = 1.0
-                if domain in domain_score_dict:
-                    score = float(domain_score_dict[domain])
-                domain_score.append(score)
-            domain_score = torch.tensor(domain_score)
+        # compute keyword entropy
+        keyword_entropy = []
+        for keywords in keyword_list:
+            entropy = 0
+            for word in keywords:
+                if word in keyword_entropy_dict:
+                    word_entropy = float(keyword_entropy_dict[word])
+                    entropy += word_entropy
+            keyword_entropy.append(entropy/len(keywords))
+        keyword_entropy = torch.tensor(keyword_entropy)
+            
+        # compute domain score
+        domain_score = []
+        for domain in domain_list:
+            score = 1.0
+            if domain in domain_score_dict:
+                score = float(domain_score_dict[domain])
+            domain_score.append(score)
+        domain_score = torch.tensor(domain_score)
             
         entity_vectors = torch.stack(entity_vectors)
         entity_length = torch.tensor(entity_length)
         entity_score = torch.tensor(entity_score)
-        domain_score = torch.tensor(domain_score)
         
-        return entity_vectors, entity_length, entity_score, domain_score
+        return entity_vectors, entity_length, entity_score, keyword_entropy, domain_score
     
     def compute_entity_vector(self, entity, wiki2vec, idf_dict, unk_idf, en_embd_dim):
         entity_item = wiki2vec.get_entity(entity)
@@ -123,15 +136,15 @@ class TestDataCollator():
     
     # build dataset and dataloader
     def load_data(self, batch_size, tokenizer, entity_to_index, index_to_entity, wiki2vec, idf_dict, unk_idf, 
-                  en_pad_size, en_embd_dim, entity_frep_file, domain_frep_file):
+                  en_pad_size, en_embd_dim, entity_frep_file, keyword_entropy_file, domain_frep_file):
         last_time = time.time()
         input_ids = self.encode_text(tokenizer)
         logger.info('Encode text: Took {} seconds'.format(time.time() - last_time))
         last_time = time.time()
-        entity_vectors, entity_length, entity_score, domain_score = self.encode_entity(entity_to_index, index_to_entity, wiki2vec, idf_dict, unk_idf, en_pad_size, en_embd_dim, entity_frep_file, domain_frep_file)
+        entity_vectors, entity_length, entity_score, keyword_entropy, domain_score = self.encode_entity(entity_to_index, index_to_entity, wiki2vec, idf_dict, unk_idf, en_pad_size, en_embd_dim, entity_frep_file, keyword_entropy_file, domain_frep_file)
         logger.info('Encode other features: Took {} seconds'.format(time.time() - last_time))
         # Split data into train and validation
-        dataset = TensorDataset(input_ids, entity_vectors, entity_length, entity_score, domain_score)
+        dataset = TensorDataset(input_ids, entity_vectors, entity_length, entity_score, keyword_entropy, domain_score)
         
         # Create train and validation dataloaders
         test_dataloader = DataLoader(dataset, batch_size = batch_size, shuffle = False)
@@ -167,3 +180,12 @@ class TestDataCollator():
                     domain_score_dict[domain] = freq
         logger.info("domain score vocab size: {}".format(len(domain_score_dict)))
         return domain_score_dict
+    
+    def load_keyword_entropy_dict(self, keyword_entropy_file):
+        keyword_entropy_dict = {}
+        with open(keyword_entropy_file) as f:
+            for line in f:
+                keyword, entropy = line.split('\t')
+                keyword_entropy_dict[keyword] = entropy
+        logger.info("keyword entropy vocab size: {}".format(len(keyword_entropy_dict)))
+        return keyword_entropy_dict

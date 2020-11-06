@@ -49,14 +49,17 @@ class FeatureExtrator:
         
         bert_score = torch.load(bert_score_root)
         all_entity_score = []
+        all_keyword_score = []
         all_domain_score = []
         for it, data in enumerate(self.data_loader):
-            text_ids, entity_vectors, entity_length, entity_score, domain_score = data[:5]
+            text_ids, entity_vectors, entity_length, entity_score, keyword_score, domain_score = data[:6]
             all_entity_score.extend(entity_score)
+            all_keyword_score.extend(keyword_score)
             all_domain_score.extend(domain_score)
         all_entity_score = torch.stack(all_entity_score, dim=0)
+        all_keyword_score = torch.stack(all_keyword_score, dim=0)
         all_domain_score = torch.stack(all_domain_score, dim=0)
-        return bert_score, all_entity_score, all_domain_score
+        return bert_score, all_entity_score, all_keyword_score, all_domain_score
         
     def get_labels(self):
         
