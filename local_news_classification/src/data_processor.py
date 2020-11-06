@@ -12,18 +12,21 @@ logger = logging.getLogger(__name__)
 
 class DataProcess():
     
-    def __init__(self, data_root, text_id_root, labels_root, entity_id_root, entity_length_root, entity_score_root):
+    def __init__(self, data_root, text_id_root, labels_root, entity_id_root, 
+                 entity_length_root, entity_score_root, domain_score_root):
         self.data_root = data_root
         self.text_id_root = text_id_root
         self.labels_root = labels_root
         self.entity_id_root = entity_id_root
         self.entity_length_root = entity_length_root
         self.entity_score_root = entity_score_root
+        self.domain_score_root = domain_score_root
     
     def prepare_data(self):
         docid_list = []
         text_list = []
         entity_list = []
+        domain_list = []
         label_list = []
         with open(self.data_root, 'r') as f:
             reader = csv.reader(f, delimiter='\t')
@@ -31,12 +34,13 @@ class DataProcess():
                 docid_list.append(line[0])
                 text_list.append(line[1])
                 entity_list.append(list(set(line[2].split('|'))))
-                label_list.append(int(line[3]))
-        return text_list, entity_list, label_list
+                domain_list.append(line[3])
+                label_list.append(int(line[4]))
+        return text_list, entity_list, domain_list, label_list
 
     # Function to get token ids for a list of texts 
     def encode_text(self, tokenizer):
-        text_list, _, label_list = self.prepare_data()
+        text_list, _, _, label_list = self.prepare_data()
         all_input_ids = []    
         num = 0
         for text in text_list:
@@ -61,7 +65,7 @@ class DataProcess():
     
     # Function to build entity vocab
     def build_entity_vocab(self):
-        _, entity_list, _ = self.prepare_data()
+        _, entity_list, _, _ = self.prepare_data()
         # get all entity
         entity_list_all = [en for entity in entity_list for en in entity]
         logger.info("All Entity number: {}".format(len(entity_list_all)))
@@ -110,7 +114,7 @@ class DataProcess():
     # Function to get token ids for a list of entities
     def build_entity_id(self, entity_to_index, index_to_entity, en_pad_size):
         # build entity index
-        _, entity_list, _ = self.prepare_data()
+        _, entity_list, _, _ = self.prepare_data()
         all_entity_ids = []
         all_entity_length = []
         for entities in entity_list:
@@ -127,8 +131,9 @@ class DataProcess():
         logger.info("Saved success!")
         return all_entity_ids, all_entity_length
     
-    def build_entity_score(self, entity_score_dict):
-        _, entity_list, _ = self.prepare_data()
+    def build_entity_score(self, entity_frep_file):
+        _, entity_list, _, _ = self.prepare_data()
+        entity_score_dict = self.load_entity_score_dict(entity_frep_file)
         all_entity_score = []
         for entities in entity_list:
             score = 1
@@ -139,10 +144,23 @@ class DataProcess():
             score = math.log(score+1e-12,10)
             all_entity_score.append(score)
         all_entity_score = torch.tensor(all_entity_score)
-        logger.info("Entity score shape: {}".format(all_entity_score.shape))
         torch.save(all_entity_score, self.entity_score_root)
-        logger.info("Saved success!")
+        logger.info("Saved success to {}".format(self.entity_score_root))
         return all_entity_score
+    
+    def build_domain_score(self, domain_frep_file):
+        _, _, domain_list, _ = self.prepare_data()
+        domain_score_dict = self.load_domain_score_dict(domain_frep_file)
+        all_domain_score = []
+        for domain in domain_list:
+            score = 1
+            if domain in domain_score_dict:
+                score = float(domain_score_dict[domain])
+            all_domain_score.append(score)
+        all_domain_score = torch.tensor(all_domain_score)
+        torch.save(all_domain_score, self.domain_score_root)
+        logger.info("Saved success to {}".format(self.domain_score_root))
+        return all_domain_score
         
     # normlize entity vector
     def en_vector_norm(self, vector):
@@ -155,9 +173,10 @@ class DataProcess():
         all_entity_ids = torch.load(self.entity_id_root)
         all_entity_length = torch.load(self.entity_length_root)
         all_entity_score = torch.load(self.entity_score_root)
+        all_domain_score = torch.load(self.domain_score_root)
         labels = torch.load(self.labels_root)
         # Split data into train and validation
-        dataset = TensorDataset(all_input_ids, all_entity_ids, all_entity_length, all_entity_score, labels)
+        dataset = TensorDataset(all_input_ids, all_entity_ids, all_entity_length, all_entity_score, all_domain_score, labels)
         train_size = int(ratio * len(dataset))
         valid_size = len(dataset) - train_size
         train_dataset, valid_dataset = random_split(dataset, [train_size, valid_size])

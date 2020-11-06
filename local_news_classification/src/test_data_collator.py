@@ -18,17 +18,19 @@ class TestDataCollator():
         docid_list = []
         text_list = []
         entity_list = []
+        domain_list = []
         with open(self.test_data_file, 'r') as f:
             reader = csv.reader(f, delimiter='\t')
             for line in reader:
                 docid_list.append(line[0])
                 text_list.append(line[1])
                 entity_list.append(list(set(line[2].split('|'))))
-        return text_list, entity_list
+                domain_list.append(line[3])
+        return text_list, entity_list, domain_list
 
     # Function to get token ids for a list of texts 
     def encode_text(self,tokenizer):
-        text_list, _ = self.split_data()
+        text_list, _, _ = self.split_data()
         all_input_ids = []    
         num = 0
         for text in text_list:
@@ -45,8 +47,10 @@ class TestDataCollator():
     
     # Function to get token ids for a list of entities
     def encode_entity(self, entity_to_index, index_to_entity, wiki2vec, idf_dict, unk_idf, 
-                      en_pad_size, en_embd_dim, entity_score_dict):
-        _, entity_list = self.split_data()
+                      en_pad_size, en_embd_dim, entity_frep_file, domain_frep_file):
+        _, entity_list, domain_list = self.split_data()
+        entity_score_dict = self.load_entity_score_dict(entity_frep_file)
+        domain_score_dict = self.load_domain_score_dict(domain_frep_file)
         entity_vectors = []
         entity_length = []
         entity_score = []
@@ -64,7 +68,7 @@ class TestDataCollator():
             entity_length.append(len(entities))
             
             # compute entity score
-            score = 1
+            score = 1.0
             for en in entities:
                 if en in entity_score_dict:
                     en_score = float(entity_score_dict[en])
@@ -72,11 +76,21 @@ class TestDataCollator():
             score = math.log(score+1e-12,10)
             entity_score.append(score)
             
+            # compute domain score
+            domain_score = []
+            for domain in domain_list:
+                score = 1.0
+                if domain in domain_score_dict:
+                    score = float(domain_score_dict[domain])
+                domain_score.append(score)
+            domain_score = torch.tensor(domain_score)
+            
         entity_vectors = torch.stack(entity_vectors)
         entity_length = torch.tensor(entity_length)
         entity_score = torch.tensor(entity_score)
+        domain_score = torch.tensor(domain_score)
         
-        return entity_vectors, entity_length, entity_score
+        return entity_vectors, entity_length, entity_score, domain_score
     
     def compute_entity_vector(self, entity, wiki2vec, idf_dict, unk_idf, en_embd_dim):
         entity_item = wiki2vec.get_entity(entity)
@@ -109,17 +123,47 @@ class TestDataCollator():
     
     # build dataset and dataloader
     def load_data(self, batch_size, tokenizer, entity_to_index, index_to_entity, wiki2vec, idf_dict, unk_idf, 
-                  en_pad_size, en_embd_dim, entity_score_dict):
+                  en_pad_size, en_embd_dim, entity_frep_file, domain_frep_file):
         last_time = time.time()
         input_ids = self.encode_text(tokenizer)
         logger.info('Encode text: Took {} seconds'.format(time.time() - last_time))
         last_time = time.time()
-        entity_vectors, entity_length, entity_score = self.encode_entity(entity_to_index, index_to_entity, wiki2vec, idf_dict, unk_idf, en_pad_size, en_embd_dim, entity_score_dict)
-        logger.info('Encode entity: Took {} seconds'.format(time.time() - last_time))
+        entity_vectors, entity_length, entity_score, domain_score = self.encode_entity(entity_to_index, index_to_entity, wiki2vec, idf_dict, unk_idf, en_pad_size, en_embd_dim, entity_frep_file, domain_frep_file)
+        logger.info('Encode other features: Took {} seconds'.format(time.time() - last_time))
         # Split data into train and validation
-        dataset = TensorDataset(input_ids, entity_vectors, entity_length, entity_score)
+        dataset = TensorDataset(input_ids, entity_vectors, entity_length, entity_score, domain_score)
         
         # Create train and validation dataloaders
         test_dataloader = DataLoader(dataset, batch_size = batch_size, shuffle = False)
         
         return test_dataloader
+    
+    def load_entity_score_dict(self, entity_frep_file, min_count=10):
+        entity_score_dict = {}
+        with open(entity_frep_file) as f:
+            for line in f:
+                entity, c1, c2, freq = line.split('\t')
+                c1 = int(c1)
+                c2 = int(c2)
+                if c1 == 0 or c2 == 0:
+                    c1 += 1
+                    c2 += 1
+                if c1 + c2 > min_count:
+                    entity_score_dict[entity] = freq
+        logger.info("Entity score vocab size: {}".format(len(entity_score_dict)))
+        return entity_score_dict
+    
+    def load_domain_score_dict(self, domain_frep_file, min_count=10):
+        domain_score_dict = {}
+        with open(domain_frep_file) as f:
+            for line in f:
+                domain, c1, c2, freq = line.split('\t')
+                c1 = int(c1)
+                c2 = int(c2)
+                if c1 == 0 or c2 == 0:
+                    c1 += 1
+                    c2 += 1
+                if c1 + c2 > min_count:
+                    domain_score_dict[domain] = freq
+        logger.info("domain score vocab size: {}".format(len(domain_score_dict)))
+        return domain_score_dict

@@ -24,49 +24,45 @@ class FeatureExtrator:
     
         all_y_pred = []
         pbar = tqdm(enumerate(self.data_loader),total=len(self.data_loader))
-        if test:
-            for it, (text_ids, entity_vectors, entity_length, _) in pbar:
-                # place data on the correct device
-                text_ids = text_ids.to(self.device)
+        for it, data in pbar:
+            if test:
+                text_ids, entity_vectors, entity_length = data[:3]
                 entity_vectors = entity_vectors.to(self.device)
-                entity_length = entity_length.to(self.device)
-                with torch.set_grad_enabled(False):
-                    y_pred = torch.sigmoid(model(text_ids, None, entity_length, entity_vectors))
-                    all_y_pred.extend(y_pred)
-                pbar.set_description(f"Test Progress")
-        else:
-            for it, (text_ids, entity_ids, entity_length, _, y) in pbar:
-                # place data on the correct device
-                text_ids = text_ids.to(self.device)
+                entity_ids = None
+            else:
+                text_ids, entity_ids, entity_length = data[:3]
                 entity_ids = entity_ids.to(self.device)
-                entity_length = entity_length.to(self.device)
-                with torch.set_grad_enabled(False):
-                    y_pred = torch.sigmoid(model(text_ids, entity_ids, entity_length))
-                    all_y_pred.extend(y_pred)
-                pbar.set_description(f"Test Progress")
+                entity_vectors = None
+            # place data on the correct device
+            text_ids = text_ids.to(self.device)
+            entity_length = entity_length.to(self.device)
+            with torch.set_grad_enabled(False):
+                y_pred = torch.sigmoid(model(text_ids, entity_ids, entity_length, entity_vectors))
+                all_y_pred.extend(y_pred)
+            pbar.set_description(f"Test Progress")
         all_y_pred = torch.stack(all_y_pred, dim=0)
         torch.save(all_y_pred, bert_score_root)
-        logger.info("Saved success!")
+        logger.info("Saved success to {}".format(bert_score_root))
         return all_y_pred
         
-    def get_entity_distribute(self, test=False):
+    def get_features(self, bert_score_root):
         
+        bert_score = torch.load(bert_score_root)
         all_entity_score = []
-        if test:
-            for it, (text_ids, entity_vectors, entity_length, entity_score) in enumerate(self.data_loader):
-                all_entity_score.extend(entity_score)
-            all_entity_score = torch.stack(all_entity_score, dim=0)
-            return all_entity_score
-        else:
-            for it, (text_ids, entity_vectors, entity_length, entity_score, y) in enumerate(self.data_loader):
-                all_entity_score.extend(entity_score)
-            all_entity_score = torch.stack(all_entity_score, dim=0)
-            return all_entity_score
+        all_domain_score = []
+        for it, data in enumerate(self.data_loader):
+            text_ids, entity_vectors, entity_length, entity_score, domain_score = data[:5]
+            all_entity_score.extend(entity_score)
+            all_domain_score.extend(domain_score)
+        all_entity_score = torch.stack(all_entity_score, dim=0)
+        all_domain_score = torch.stack(all_domain_score, dim=0)
+        return bert_score, all_entity_score, all_domain_score
         
     def get_labels(self):
         
         all_labels = []
-        for it, (text_ids, entity_vectors, entity_length, entity_score, y) in enumerate(self.data_loader):
+        for it, data in enumerate(self.data_loader):
+            y = data[-1]
             all_labels.extend(y)
         all_labels = torch.stack(all_labels, dim=0)
         return all_labels
