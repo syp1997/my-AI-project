@@ -154,14 +154,20 @@ class DataProcess():
     def build_keyword_entropy(self, keyword_entropy_file):
         _, _, keyword_list, _, _ = self.prepare_data()
         keyword_entropy_dict = self.load_keyword_entropy_dict(keyword_entropy_file)
+        keyword_entropy_mean = np.mean(list(map(float,list(keyword_entropy_dict.values()))))
         all_keyword_entropy = []
         for keywords in keyword_list:
             entropy = 0
+            num_words = 0
             for word in keywords:
                 if word in keyword_entropy_dict:
+                    num_words += 1
                     word_entropy = float(keyword_entropy_dict[word])
                     entropy += word_entropy
-            all_keyword_entropy.append(entropy/len(keywords))
+            if num_words == 0:
+                all_keyword_entropy.append(math.exp(keyword_entropy_mean))
+            else:
+                all_keyword_entropy.append(math.exp(entropy/len(keywords)))
         all_keyword_entropy = torch.tensor(all_keyword_entropy)
         torch.save(all_keyword_entropy, self.keyword_entropy_root)
         logger.info("Saved success to {}".format(self.keyword_entropy_root))

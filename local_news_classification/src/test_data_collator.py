@@ -80,14 +80,20 @@ class TestDataCollator():
             entity_score.append(score)
             
         # compute keyword entropy
+        keyword_entropy_mean = np.mean(list(map(float,list(keyword_entropy_dict.values()))))
         keyword_entropy = []
         for keywords in keyword_list:
             entropy = 0
+            num_words = 0
             for word in keywords:
                 if word in keyword_entropy_dict:
+                    num_words += 1
                     word_entropy = float(keyword_entropy_dict[word])
                     entropy += word_entropy
-            keyword_entropy.append(entropy/len(keywords))
+            if num_words == 0:
+                keyword_entropy.append(math.exp(keyword_entropy_mean))
+            else:
+                keyword_entropy.append(math.exp(entropy/len(keywords)))
         keyword_entropy = torch.tensor(keyword_entropy)
             
         # compute domain score
