@@ -11,9 +11,11 @@ logger = logging.getLogger(__name__)
 
 
 class DataProcess():
+    """ Process data especially training data. """
     
     def __init__(self, data_root, text_id_root, labels_root, entity_id_root, 
                  entity_length_root, entity_score_root, keyword_entropy_root, domain_score_root):
+        # init some root for saving data to avoid process many times
         self.data_root = data_root
         self.text_id_root = text_id_root
         self.labels_root = labels_root
@@ -24,6 +26,7 @@ class DataProcess():
         self.domain_score_root = domain_score_root
     
     def prepare_data(self):
+        # split data to list
         docid_list = []
         text_list = []
         entity_list = []
@@ -41,8 +44,8 @@ class DataProcess():
                 label_list.append(int(line[5]))
         return text_list, entity_list, keyword_list, domain_list, label_list
 
-    # Function to get token ids for a list of texts 
     def encode_text(self, tokenizer):
+        #get token ids for a bunch of texts
         text_list, _, _, _, label_list = self.prepare_data()
         all_input_ids = []    
         num = 0
@@ -66,7 +69,6 @@ class DataProcess():
         logger.info("Saved success!")
         return all_input_ids, labels
     
-    # Function to build entity vocab
     def build_entity_vocab(self):
         _, entity_list, _, _, _ = self.prepare_data()
         # get all entity
@@ -83,9 +85,8 @@ class DataProcess():
         logger.info("Entity vocab size: {}".format(len(entity_to_index)))
         return entity_to_index, index_to_entity
     
-    # Function to build entity vocab with pretrained vector
     def build_entity_vector(self, entity_to_index, index_to_entity, wiki2vec, idf_dict, unk_idf, en_embd_dim, entity_vector_root):
-        # build entity vector
+        # build entity vector from pretrained wiki vector
         idx_to_vector=[]
         for entity in entity_to_index.keys():
             entity_item = wiki2vec.get_entity(entity)
@@ -114,7 +115,6 @@ class DataProcess():
         logger.info("Saved success!")
         return entity_vector
     
-    # Function to get token ids for a list of entities
     def build_entity_id(self, entity_to_index, index_to_entity, en_pad_size):
         # build entity index
         _, entity_list, _, _, _ = self.prepare_data()
@@ -187,13 +187,13 @@ class DataProcess():
         logger.info("Saved success to {}".format(self.domain_score_root))
         return all_domain_score
         
-    # normlize entity vector
     def en_vector_norm(self, vector):
+        # normlize entity vector
         norm = np.linalg.norm(vector)
         return vector / (norm + 1e-9)
     
-    # build dataset and dataloader
     def load_data(self, ratio, batch_size):
+        # build dataset and load dataloader
         all_input_ids = torch.load(self.text_id_root)
         all_entity_ids = torch.load(self.entity_id_root)
         all_entity_length = torch.load(self.entity_length_root)
@@ -221,9 +221,8 @@ class DataProcess():
 
         return all_dataloader, train_dataloader, valid_dataloader
     
-    
-    # load idf file
     def load_idf(self, idf_file):
+        # load idf file
         ret = {}
         with open(idf_file) as f:
             for line in f:

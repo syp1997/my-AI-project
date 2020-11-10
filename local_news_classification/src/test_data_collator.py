@@ -10,6 +10,7 @@ logger = logging.getLogger(__name__)
 
 
 class TestDataCollator():
+    """ Load test data """
     
     def __init__(self, test_data_file):
         self.test_data_file = test_data_file
@@ -30,7 +31,6 @@ class TestDataCollator():
                 domain_list.append(line[4])
         return text_list, entity_list, keyword_list, domain_list
 
-    # Function to get token ids for a list of texts 
     def encode_text(self,tokenizer):
         text_list, _, _, _ = self.split_data()
         all_input_ids = []    
@@ -47,7 +47,6 @@ class TestDataCollator():
         all_input_ids = torch.cat(all_input_ids, dim=0)
         return all_input_ids
     
-    # Function to get token ids for a list of entities
     def encode_entity(self, entity_to_index, index_to_entity, wiki2vec, idf_dict, unk_idf, 
                       en_pad_size, en_embd_dim, entity_frep_file, keyword_entropy_file, domain_frep_file):
         _, entity_list, keyword_list, domain_list = self.split_data()
@@ -134,15 +133,14 @@ class TestDataCollator():
                 weights = np.expand_dims(np.array(weights), axis=1)
                 return self.en_vector_norm(np.sum(word_vectors * weights, axis=0))
     
-    # normlize entity vector
     def en_vector_norm(self, vector):
+        # normlize entity vector
         norm = np.linalg.norm(vector)
         return vector / (norm + 1e-9)
     
-    
-    # build dataset and dataloader
     def load_data(self, batch_size, tokenizer, entity_to_index, index_to_entity, wiki2vec, idf_dict, unk_idf, 
                   en_pad_size, en_embd_dim, entity_frep_file, keyword_entropy_file, domain_frep_file):
+        # build dataset and load dataloader
         last_time = time.time()
         input_ids = self.encode_text(tokenizer)
         logger.info('Encode text: Took {} seconds'.format(time.time() - last_time))

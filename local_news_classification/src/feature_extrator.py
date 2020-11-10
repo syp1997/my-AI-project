@@ -6,6 +6,7 @@ logger = logging.getLogger(__name__)
 
 
 class FeatureExtrator:
+    """ extract features for training xgboost"""
 
     def __init__(self, model, data_loader):
         self.model = model
@@ -46,7 +47,6 @@ class FeatureExtrator:
         return all_y_pred
         
     def get_features(self, bert_score_root):
-        
         bert_score = torch.load(bert_score_root)
         all_entity_score = []
         all_keyword_score = []
@@ -62,7 +62,6 @@ class FeatureExtrator:
         return bert_score, all_entity_score, all_keyword_score, all_domain_score
         
     def get_labels(self):
-        
         all_labels = []
         for it, data in enumerate(self.data_loader):
             y = data[-1]

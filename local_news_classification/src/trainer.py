@@ -19,7 +19,7 @@ class TrainerConfig:
     warmup_tokens = 375e6 # use this to train model from a lower learning rate
     final_tokens = 260e9 # all tokens during whole training process
     # checkpoint settings
-    ckpt_path = 'local-likely-model.pt' # save model path
+    ckpt_path = 'bert_model.pt' # save model path
     num_workers = 0 # for DataLoader
 
     def __init__(self, **kwargs):

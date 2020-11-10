@@ -10,6 +10,7 @@ logger = logging.getLogger(__name__)
 
 class ModelConfig:
     """ base mdoel config """
+    
     output_size = 1 # local(1) or non-local(0)
     dropout_prob = 0.1
     
@@ -25,6 +26,7 @@ class ModelConfig:
             
 
 class Model(nn.Module):
+    """ Bert combine with Entity model """
 
     def __init__(self, config):
         super().__init__()
@@ -104,8 +106,8 @@ class EntityEncoder(nn.Module):
         
         return x
     
-    # do this because of different entity length
     def single_pool(self, x, x_length):
+        """ do this because of different entity length """
         all_pool_out = []
         for i in range(x.shape[0]):
             if x_length[i] == 0:
