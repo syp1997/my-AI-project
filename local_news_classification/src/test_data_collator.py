@@ -12,25 +12,29 @@ logger = logging.getLogger(__name__)
 class TestDataCollator():
     """ Load test data """
     
-    def __init__(self, test_data_file):
-        self.test_data_file = test_data_file
+    def __init__(self, data_list=None, data_file=None):
+        self.data_list = data_list
+        self.data_file = data_file
 
     def split_data(self):
+        if self.data_list is None:
+            f = open(self.data_file, 'r')
+            data_reader = csv.reader(f, delimiter='\t')
+        else:
+            data_reader = self.data_list
         docid_list = []
         text_list = []
         entity_list = []
         keyword_list = []
         domain_list = []
-        with open(self.test_data_file, 'r') as f:
-            reader = csv.reader(f, delimiter='\t')
-            for line in reader:
-                docid_list.append(line[0])
-                text_list.append(line[1])
-                entity_list.append(list(set(line[2].split('|'))))
-                keyword_list.append(list(set(line[3].split('|'))))
-                domain_list.append(line[4])
+        for data in data_reader:
+            docid_list.append(data[0])
+            text_list.append(data[1])
+            entity_list.append(list(set(data[2].split('|'))))
+            keyword_list.append(list(set(data[3].split('|'))))
+            domain_list.append(data[4])
         return text_list, entity_list, keyword_list, domain_list
-
+    
     def encode_text(self,tokenizer):
         text_list, _, _, _ = self.split_data()
         all_input_ids = []    
@@ -47,12 +51,9 @@ class TestDataCollator():
         all_input_ids = torch.cat(all_input_ids, dim=0)
         return all_input_ids
     
-    def encode_entity(self, entity_to_index, index_to_entity, wiki2vec, idf_dict, unk_idf, 
-                      en_pad_size, en_embd_dim, entity_frep_file, keyword_entropy_file, domain_frep_file):
+    def encode_entity(self, wiki2vec, idf_dict, unk_idf, en_pad_size, en_embd_dim, entity_score_dict, 
+                      keyword_entropy_dict, domain_score_dict, keyword_entropy_mean):
         _, entity_list, keyword_list, domain_list = self.split_data()
-        entity_score_dict = self.load_entity_score_dict(entity_frep_file)
-        keyword_entropy_dict = self.load_keyword_entropy_dict(keyword_entropy_file)
-        domain_score_dict = self.load_domain_score_dict(domain_frep_file)
         entity_vectors = []
         entity_length = []
         entity_score = []
@@ -60,7 +61,9 @@ class TestDataCollator():
             # conpute entity vector
             nopad_vectors=[]
             for entity in entities[:en_pad_size]:
-                nopad_vectors.append(torch.tensor(self.compute_entity_vector(entity, wiki2vec, idf_dict, unk_idf, en_embd_dim)).float())
+                nopad_vectors.append(
+                    torch.tensor(self.compute_entity_vector(entity, wiki2vec, idf_dict, unk_idf, en_embd_dim)).float()
+                )
             nopad_vectors = torch.stack(nopad_vectors)
             # pad entity vector
             vectors = torch.cat([nopad_vectors,torch.zeros(en_pad_size-nopad_vectors.shape[0], en_embd_dim)])
@@ -79,7 +82,6 @@ class TestDataCollator():
             entity_score.append(score)
             
         # compute keyword entropy
-        keyword_entropy_mean = np.mean(list(map(float,list(keyword_entropy_dict.values()))))
         keyword_entropy = []
         for keywords in keyword_list:
             entropy = 0
@@ -138,14 +140,20 @@ class TestDataCollator():
         norm = np.linalg.norm(vector)
         return vector / (norm + 1e-9)
     
-    def load_data(self, batch_size, tokenizer, entity_to_index, index_to_entity, wiki2vec, idf_dict, unk_idf, 
-                  en_pad_size, en_embd_dim, entity_frep_file, keyword_entropy_file, domain_frep_file):
+    def load_data(self, batch_size, tokenizer, wiki2vec, idf_dict, unk_idf, en_pad_size, en_embd_dim, 
+                  entity_score_dict, keyword_entropy_dict, domain_score_dict, keyword_entropy_mean):
         # build dataset and load dataloader
         last_time = time.time()
         input_ids = self.encode_text(tokenizer)
         logger.info('Encode text: Took {} seconds'.format(time.time() - last_time))
         last_time = time.time()
-        entity_vectors, entity_length, entity_score, keyword_entropy, domain_score = self.encode_entity(entity_to_index, index_to_entity, wiki2vec, idf_dict, unk_idf, en_pad_size, en_embd_dim, entity_frep_file, keyword_entropy_file, domain_frep_file)
+        features = self.encode_entity(
+            wiki2vec, idf_dict, unk_idf, 
+            en_pad_size, en_embd_dim, 
+            entity_score_dict, keyword_entropy_dict, 
+            domain_score_dict, keyword_entropy_mean
+        )
+        entity_vectors, entity_length, entity_score, keyword_entropy, domain_score = features
         logger.info('Encode other features: Took {} seconds'.format(time.time() - last_time))
         # Split data into train and validation
         dataset = TensorDataset(input_ids, entity_vectors, entity_length, entity_score, keyword_entropy, domain_score)
@@ -154,42 +162,3 @@ class TestDataCollator():
         test_dataloader = DataLoader(dataset, batch_size = batch_size, shuffle = False)
         
         return test_dataloader
-    
-    def load_entity_score_dict(self, entity_frep_file, min_count=10):
-        entity_score_dict = {}
-        with open(entity_frep_file) as f:
-            for line in f:
-                entity, c1, c2, freq = line.split('\t')
-                c1 = int(c1)
-                c2 = int(c2)
-                if c1 == 0 or c2 == 0:
-                    c1 += 1
-                    c2 += 1
-                if c1 + c2 > min_count:
-                    entity_score_dict[entity] = freq
-        logger.info("Entity score vocab size: {}".format(len(entity_score_dict)))
-        return entity_score_dict
-    
-    def load_domain_score_dict(self, domain_frep_file, min_count=10):
-        domain_score_dict = {}
-        with open(domain_frep_file) as f:
-            for line in f:
-                domain, c1, c2, freq = line.split('\t')
-                c1 = int(c1)
-                c2 = int(c2)
-                if c1 == 0 or c2 == 0:
-                    c1 += 1
-                    c2 += 1
-                if c1 + c2 > min_count:
-                    domain_score_dict[domain] = freq
-        logger.info("domain score vocab size: {}".format(len(domain_score_dict)))
-        return domain_score_dict
-    
-    def load_keyword_entropy_dict(self, keyword_entropy_file):
-        keyword_entropy_dict = {}
-        with open(keyword_entropy_file) as f:
-            for line in f:
-                keyword, entropy = line.split('\t')
-                keyword_entropy_dict[keyword] = entropy
-        logger.info("keyword entropy vocab size: {}".format(len(keyword_entropy_dict)))
-        return keyword_entropy_dict

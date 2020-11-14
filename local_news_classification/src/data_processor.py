@@ -13,17 +13,9 @@ logger = logging.getLogger(__name__)
 class DataProcess():
     """ Process data especially training data. """
     
-    def __init__(self, data_root, text_id_root, labels_root, entity_id_root, 
-                 entity_length_root, entity_score_root, keyword_entropy_root, domain_score_root):
-        # init some root for saving data to avoid process many times
-        self.data_root = data_root
-        self.text_id_root = text_id_root
-        self.labels_root = labels_root
-        self.entity_id_root = entity_id_root
-        self.entity_length_root = entity_length_root
-        self.entity_score_root = entity_score_root
-        self.keyword_entropy_root = keyword_entropy_root
-        self.domain_score_root = domain_score_root
+    def __init__(self, train_data_file=None):
+        # input train data file when need training model
+        self.train_data_file = train_data_file
     
     def prepare_data(self):
         # split data to list
@@ -33,7 +25,7 @@ class DataProcess():
         keyword_list = []
         domain_list = []
         label_list = []
-        with open(self.data_root, 'r') as f:
+        with open(self.train_data_file, 'r') as f:
             reader = csv.reader(f, delimiter='\t')
             for line in reader:
                 docid_list.append(line[0])
@@ -44,7 +36,7 @@ class DataProcess():
                 label_list.append(int(line[5]))
         return text_list, entity_list, keyword_list, domain_list, label_list
 
-    def encode_text(self, tokenizer):
+    def encode_text(self, tokenizer, text_id_root, labels_root):
         #get token ids for a bunch of texts
         text_list, _, _, _, label_list = self.prepare_data()
         all_input_ids = []    
@@ -64,7 +56,7 @@ class DataProcess():
         all_input_ids = torch.cat(all_input_ids, dim=0)
         labels = torch.tensor(label_list, dtype=torch.float)
         # Save tensor
-        torch.save(all_input_ids, self.text_id_root)
+        torch.save(all_input_ids, text_id_root)
         torch.save(labels,self.labels_root)
         logger.info("Saved success!")
         return all_input_ids, labels
@@ -115,7 +107,7 @@ class DataProcess():
         logger.info("Saved success!")
         return entity_vector
     
-    def build_entity_id(self, entity_to_index, index_to_entity, en_pad_size):
+    def build_entity_id(self, entity_to_index, index_to_entity, en_pad_size, entity_id_root, entity_length_root):
         # build entity index
         _, entity_list, _, _, _ = self.prepare_data()
         all_entity_ids = []
@@ -129,12 +121,12 @@ class DataProcess():
             all_entity_length.append(len(entities))
         all_entity_ids = torch.tensor(all_entity_ids)
         all_entity_length = torch.tensor(all_entity_length)
-        torch.save(all_entity_ids, self.entity_id_root)
-        torch.save(all_entity_length, self.entity_length_root)
+        torch.save(all_entity_ids, entity_id_root)
+        torch.save(all_entity_length, entity_length_root)
         logger.info("Saved success!")
         return all_entity_ids, all_entity_length
     
-    def build_entity_score(self, entity_frep_file):
+    def build_entity_score(self, entity_frep_file, entity_score_root):
         _, entity_list, _, _, _ = self.prepare_data()
         entity_score_dict = self.load_entity_score_dict(entity_frep_file)
         all_entity_score = []
@@ -147,11 +139,11 @@ class DataProcess():
             score = math.log(score+1e-12,10)
             all_entity_score.append(score)
         all_entity_score = torch.tensor(all_entity_score)
-        torch.save(all_entity_score, self.entity_score_root)
-        logger.info("Saved success to {}".format(self.entity_score_root))
+        torch.save(all_entity_score, entity_score_root)
+        logger.info("Saved success to {}".format(entity_score_root))
         return all_entity_score
     
-    def build_keyword_entropy(self, keyword_entropy_file):
+    def build_keyword_entropy(self, keyword_entropy_file, keyword_entropy_root):
         _, _, keyword_list, _, _ = self.prepare_data()
         keyword_entropy_dict = self.load_keyword_entropy_dict(keyword_entropy_file)
         keyword_entropy_mean = np.mean(list(map(float,list(keyword_entropy_dict.values()))))
@@ -169,11 +161,11 @@ class DataProcess():
             else:
                 all_keyword_entropy.append(math.exp(entropy/len(keywords)))
         all_keyword_entropy = torch.tensor(all_keyword_entropy)
-        torch.save(all_keyword_entropy, self.keyword_entropy_root)
-        logger.info("Saved success to {}".format(self.keyword_entropy_root))
+        torch.save(all_keyword_entropy, keyword_entropy_root)
+        logger.info("Saved success to {}".format(keyword_entropy_root))
         return all_keyword_entropy
     
-    def build_domain_score(self, domain_frep_file):
+    def build_domain_score(self, domain_frep_file, domain_score_root):
         _, _, _, domain_list, _ = self.prepare_data()
         domain_score_dict = self.load_domain_score_dict(domain_frep_file)
         all_domain_score = []
@@ -183,8 +175,8 @@ class DataProcess():
                 score = float(domain_score_dict[domain])
             all_domain_score.append(score)
         all_domain_score = torch.tensor(all_domain_score)
-        torch.save(all_domain_score, self.domain_score_root)
-        logger.info("Saved success to {}".format(self.domain_score_root))
+        torch.save(all_domain_score, domain_score_root)
+        logger.info("Saved success to {}".format(domain_score_root))
         return all_domain_score
         
     def en_vector_norm(self, vector):
@@ -192,15 +184,19 @@ class DataProcess():
         norm = np.linalg.norm(vector)
         return vector / (norm + 1e-9)
     
-    def load_data(self, ratio, batch_size):
+    def load_data(self, ratio, batch_size, 
+                  text_id_root, labels_root,
+                  entity_id_root, entity_length_root, 
+                  entity_score_root, keyword_entropy_root,
+                  domain_score_root):
         # build dataset and load dataloader
-        all_input_ids = torch.load(self.text_id_root)
-        all_entity_ids = torch.load(self.entity_id_root)
-        all_entity_length = torch.load(self.entity_length_root)
-        all_entity_score = torch.load(self.entity_score_root)
-        all_keyword_entropy = torch.load(self.keyword_entropy_root)
-        all_domain_score = torch.load(self.domain_score_root)
-        labels = torch.load(self.labels_root)
+        all_input_ids = torch.load(text_id_root)
+        all_entity_ids = torch.load(entity_id_root)
+        all_entity_length = torch.load(entity_length_root)
+        all_entity_score = torch.load(entity_score_root)
+        all_keyword_entropy = torch.load(keyword_entropy_root)
+        all_domain_score = torch.load(domain_score_root)
+        labels = torch.load(labels_root)
         # Split data into train and validation
         dataset = TensorDataset(all_input_ids, all_entity_ids, 
                                 all_entity_length, all_entity_score, 
@@ -229,7 +225,7 @@ class DataProcess():
                 phrase, count, idf = line.split('\t')
                 idf = float(idf)
                 ret[phrase] = idf
-        logger.info("Load success!")
+        logger.info("Load success from {}".format(idf_file))
         return ret, ret['<UNK>']
 
     def load_entity_score_dict(self, entity_frep_file, min_count=10):
@@ -276,7 +272,7 @@ class DataProcess():
         logger.info("Entity vector shape: {}".format(entity_vector.shape))
         return entity_vector
     
-    def load_entity_score(self):
-        entity_score = torch.load(self.entity_score_root)
+    def load_entity_score(self, entity_score_root):
+        entity_score = torch.load(entity_score_root)
         logger.info("Entity score shape: {}".format(entity_score.shape))
         return entity_score

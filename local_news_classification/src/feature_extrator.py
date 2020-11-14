@@ -1,6 +1,6 @@
 import torch
-from tqdm import tqdm
 import logging
+import time
 
 logger = logging.getLogger(__name__)
 
@@ -8,24 +8,17 @@ logger = logging.getLogger(__name__)
 class FeatureExtrator:
     """ extract features for training xgboost"""
 
-    def __init__(self, model, data_loader):
+    def __init__(self, model, data_loader, device):
         self.model = model
         self.data_loader = data_loader
-
-        # take over whatever gpus are on the system
-        self.device = 'cpu'
-        if torch.cuda.is_available():
-            self.device = torch.device('cuda')
-            self.model = torch.nn.DataParallel(self.model).to(self.device)
-        logger.info('use device: {}'.format(self.device))
+        self.device = device
         
-    def generate_score(self, bert_score_root, test=False):
+    def generate_score(self, test):
         model = self.model
         model.eval()
     
         all_y_pred = []
-        pbar = tqdm(enumerate(self.data_loader),total=len(self.data_loader))
-        for it, data in pbar:
+        for it, data in enumerate(self.data_loader):
             if test:
                 text_ids, entity_vectors, entity_length = data[:3]
                 entity_vectors = entity_vectors.to(self.device)
@@ -40,14 +33,13 @@ class FeatureExtrator:
             with torch.set_grad_enabled(False):
                 y_pred = torch.sigmoid(model(text_ids, entity_ids, entity_length, entity_vectors))
                 all_y_pred.extend(y_pred)
-            pbar.set_description(f"Test Progress")
         all_y_pred = torch.stack(all_y_pred, dim=0)
-        torch.save(all_y_pred, bert_score_root)
-        logger.info("Saved success to {}".format(bert_score_root))
         return all_y_pred
         
-    def get_features(self, bert_score_root):
-        bert_score = torch.load(bert_score_root)
+    def get_features(self, test=False):
+        last_time = time.time()
+        bert_score = self.generate_score(test)
+        logger.info('Bert score: Took {} seconds'.format(time.time() - last_time))
         all_entity_score = []
         all_keyword_score = []
         all_domain_score = []
@@ -68,4 +60,15 @@ class FeatureExtrator:
             all_labels.extend(y)
         all_labels = torch.stack(all_labels, dim=0)
         return all_labels
+    
+    def process_features(self, bert_score, entity_score, keyword_entropy, domain_score):
+        bert_score = bert_score.unsqueeze(-1).to('cpu')
+        entity_score = entity_score.unsqueeze(-1)
+        keyword_entropy = keyword_entropy.unsqueeze(-1)
+        domain_score = domain_score.unsqueeze(-1)
+        features = torch.cat([bert_score, entity_score, keyword_entropy],dim=1)
+        return features
+    
+    def process_labels(self, labels):
+        return labels.view(labels.shape[0],-1)
         

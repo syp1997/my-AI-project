@@ -80,7 +80,8 @@ class EntityEncoder(nn.Module):
 
     def __init__(self, config):
         super().__init__()
-        self.en_embeddings = nn.Embedding.from_pretrained(config.entity_vector,freeze=True)
+        if config.entity_vector != None:
+            self.en_embeddings = nn.Embedding.from_pretrained(config.entity_vector,freeze=True)
 
         self.ln1 = nn.LayerNorm(config.en_embd_dim, eps=1e-12)
         self.dropout = nn.Dropout(config.dropout_prob)
