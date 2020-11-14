@@ -1,0 +1,11 @@
+torch==1.4.0
+numpy
+transformers
+wikipedia2vec
+flask
+flask_bootstrap
+flask_moment
+pymongo
+xgboost
+sklearn
+gunicorn

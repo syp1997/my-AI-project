@@ -1,0 +1,1 @@
+kill -9 `ps aux | grep 8923 | grep -v grep | tr -s " " | cut -d " " -f 2`
