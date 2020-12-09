@@ -20,6 +20,7 @@ fields = {
     'ne_title_location': 1,
     'ne_title_organization': 1,
     'ne_title_person': 1,
+    'text_category': 1,
     'text_category_v2': 1,
 }
 
@@ -37,27 +38,52 @@ def find_doc(docid):
 def preprocess_doc(doc):
     if not doc:
         return
+    if 'seg_title' in doc:
+        doc['stitle'] = doc['seg_title']
+
     if 'stitle' not in doc:
         doc['stitle'] = ''
+        
     if 'seg_content' not in doc:
         doc['seg_content'] = ''
 
+    doc['keywords'] = {w for w in doc.get('kws', [])}
+    
+    def merge_entity(en,dic):
+        for k,v in dic.items():
+            en[k] = en.get(k,0)+v
+    entity_all = {}
+    en_list = [
+        'ne_content_location', 
+        'ne_title_location', 
+        'ne_content_organization', 
+        'ne_title_organization',
+        'ne_content_person',
+        'ne_title_person'
+    ]
+    for dic in en_list:
+        merge_entity(entity_all, doc.get(dic, {}))
+    en_sort=sorted(entity_all.items(), key = lambda item:item[1], reverse=True)
+    entity_uniq = [en[0] for en in en_sort]
+    doc['entity'] = entity_uniq
+    
     if 'text_category_v2' in doc:
         doc['text_category'] = doc['text_category_v2']
-
-    doc['keywords'] = {w for w in doc.get('kws', [])}
-    ne_loc = set()
-    ne_loc.update(doc.get('ne_content_location', {}).keys())
-    ne_loc.update(doc.get('ne_title_location', {}).keys())
-    ne_per = set()
-    ne_per.update(doc.get('ne_content_person', {}).keys())
-    ne_per.update(doc.get('ne_title_person', {}).keys())
-    ne_org = set()
-    ne_org.update(doc.get('ne_content_organization', {}).keys())
-    ne_org.update(doc.get('ne_title_organization', {}).keys())
-    doc['ne_loc'] = ne_loc
-    doc['ne_per'] = ne_per
-    doc['ne_org'] = ne_org
+    cat_1 = ''
+    if 'text_category' in doc and 'first_cat' in doc['text_category']:
+        first_cat = doc['text_category']['first_cat']
+        for k,v in first_cat.items():
+            if v == max(first_cat.values()):
+                cat_1  = k
+                break
+    cat_2 = set()
+    cat_2 = (doc.get('text_category', {}).get('second_cat',''))
+    cat_3 = set()
+    cat_3 = (doc.get('text_category', {}).get('third_cat',''))
+    doc['cat_1'] = cat_1
+    doc['cat_2'] = cat_2
+    doc['cat_3'] = cat_3
+    
     process_dateline(doc)
 
 

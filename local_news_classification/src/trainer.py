@@ -69,7 +69,7 @@ class Trainer:
             all_y = []
             all_y_pred = []
             pbar = tqdm(enumerate(loader), total=len(loader)) if is_train else enumerate(loader)
-            for it, (text_ids, entity_ids, entity_length, _, _, _, y) in pbar:
+            for it, (text_ids, entity_ids, entity_length, y) in pbar:
                 # place data on the correct device
                 text_ids = text_ids.to(self.device)
                 entity_ids = entity_ids.to(self.device)

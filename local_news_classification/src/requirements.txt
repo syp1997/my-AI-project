@@ -1,6 +1,6 @@
 torch==1.4.0
 numpy
-transformers
+transformers==3.3.1
 wikipedia2vec
 flask
 flask_bootstrap

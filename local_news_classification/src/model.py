@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from transformers import BertModel
+from transformers import BertConfig
 import numpy as np
 import logging
 
@@ -13,11 +14,13 @@ class ModelConfig:
     
     output_size = 1 # local(1) or non-local(0)
     dropout_prob = 0.1
+    bert_config = BertConfig()
     
-    def __init__(self, model_name, entity_vector, en_embd_dim, en_hidden_size1, en_hidden_size2, **kwargs):
+    def __init__(self, model_name, entity_vector, en_embd_dim, en_vocab_size, en_hidden_size1, en_hidden_size2, **kwargs):
         self.model_name = model_name
         self.entity_vector = entity_vector
         self.en_embd_dim = en_embd_dim
+        self.en_vocab_size = en_vocab_size
         self.en_hidden_size1 = en_hidden_size1
         self.en_hidden_size2 = en_hidden_size2
 
@@ -28,9 +31,12 @@ class ModelConfig:
 class Model(nn.Module):
     """ Bert combine with Entity model """
 
-    def __init__(self, config):
+    def __init__(self, config, use_pretrained_model=False):
         super().__init__()
-        self.bert = BertModel.from_pretrained(config.model_name)
+        if use_pretrained_model:
+            self.bert = BertModel.from_pretrained(config.model_name)
+        else:
+            self.bert = BertModel(config.bert_config)
         self.ln = nn.LayerNorm(self.bert.pooler.dense.weight.shape[0], eps=1e-12)
         self.use_en_encoder = config.use_en_encoder
         if self.use_en_encoder: # if use entity infomation
@@ -82,7 +88,8 @@ class EntityEncoder(nn.Module):
         super().__init__()
         if config.entity_vector != None:
             self.en_embeddings = nn.Embedding.from_pretrained(config.entity_vector,freeze=True)
-
+        else:
+            self.en_embeddings = nn.Embedding(config.en_vocab_size, config.en_embd_dim, padding_idx=None)
         self.ln1 = nn.LayerNorm(config.en_embd_dim, eps=1e-12)
         self.dropout = nn.Dropout(config.dropout_prob)
         self.mlp = nn.Sequential(
